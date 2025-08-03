@@ -1,0 +1,13 @@
+names:
+  0: player_name
+  1: grade
+  2: points
+  3: rebounds
+  4: assists
+  5: steals
+  6: blocks
+  7: fouls
+  8: turnovers
+  9: fgm_fga
+  10: 3pm_3pa
+  11: ftm_fta

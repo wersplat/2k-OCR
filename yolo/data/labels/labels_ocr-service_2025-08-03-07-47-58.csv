@@ -1,0 +1,13 @@
+label_name,bbox_x,bbox_y,bbox_width,bbox_height,image_name,image_width,image_height
+player_name,449,148,231,530,Screenshot_795.png,1614,787
+grade,698,145,52,535,Screenshot_795.png,1614,787
+points,776,146,55,532,Screenshot_795.png,1614,787
+rebounds,856,145,49,532,Screenshot_795.png,1614,787
+assists,932,143,45,534,Screenshot_795.png,1614,787
+steals,1004,143,50,536,Screenshot_795.png,1614,787
+blocks,1078,142,46,535,Screenshot_795.png,1614,787
+fouls,1150,143,49,534,Screenshot_795.png,1614,787
+turnovers,1227,148,46,529,Screenshot_795.png,1614,787
+fem_fga,1296,143,92,532,Screenshot_795.png,1614,787
+3pm_3pa,1414,145,88,530,Screenshot_795.png,1614,787
+fem_fta,1518,147,91,529,Screenshot_795.png,1614,787
