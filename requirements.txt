@@ -7,4 +7,6 @@ easyocr
 gspread
 oauth2client
 torch
-torchvision
+torchvision 
+torchaudio
+

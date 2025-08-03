@@ -64,8 +64,12 @@ TEAM_QUARTER_WIDTH = 85
 TEAM_QUARTER_HEIGHT = 145
 
 # Check GPU availability
-logging.info(f"CUDA available: {torch.cuda.is_available()}")
-logging.info(f"GPU: {torch.cuda.get_device_name(0)}")
+cuda_available = torch.cuda.is_available()
+logging.info(f"CUDA available: {cuda_available}")
+if cuda_available:
+    logging.info(f"GPU: {torch.cuda.get_device_name(0)}")
+else:
+    logging.info("Running on CPU")
 
 class OCRProcessor:
     def __init__(self):
@@ -153,7 +157,8 @@ class OCRProcessor:
         return stat
 
     def detect_text_in_image(self, image, region_name, allowlist=None):
-        reader = easyocr.Reader(['en'], gpu=True)
+        # Use CPU explicitly since we're in a CPU-only environment
+        reader = easyocr.Reader(['en'], gpu=False)
     
         # Convert PIL image to OpenCV format
         img_cropped = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
