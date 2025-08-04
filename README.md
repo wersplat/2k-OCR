@@ -1,191 +1,334 @@
-## Automate 2k
+# NBA 2K OCR - End-to-End Box Score Processing System
 
-### Project Overview
+A comprehensive OCR system for extracting player and team statistics from NBA 2K box score screenshots. This system combines YOLOv8 for stat region detection, EasyOCR for text recognition, and provides a complete workflow from image processing to model training.
 
-This project consists of two main Python scripts, `automate_sheet.py` and `automate_2k.py`, designed to automate the process of extracting game data from images and logging it into Google Sheets. The project uses OCR (Optical Character Recognition) to read data from images and then processes and logs this data into Google Sheets for further analysis.
+## 🏀 Features
 
-This will not work on pictures of your TV! This is meant for screenshots downloaded specifically from the PSN app! You can try to use Xbox screenshots but they will more than likely extract inaccurate data.
+### Core OCR Processing
 
-### Features
+- **Dual Mode Processing**: Support for both legacy (fixed coordinates) and YOLO-based region detection
+- **Multi-format Support**: Handles PNG, JPG, JPEG images
+- **Structured Output**: Generates JSON with player stats, team quarters, and metadata
+- **Batch Processing**: Process single images or entire folders
 
-- **OCR Processing**: Extracts player and team statistics from game images.
-  - Not camera pictures. You need literal screenshots extracted from the PSN app.
-- **Google Sheets Integration**: Logs the extracted data into specified Google Sheets.
-- **Exponential Backoff**: Handles API rate limits *relatively* gracefully.
+### Web Dashboard
 
-### Issues
+- **Modern UI**: Clean, responsive dashboard built with FastAPI and Bootstrap
+- **Real-time Processing**: Upload and process images through the web interface
+- **Result Visualization**: View OCR results side-by-side with original images
+- **Reprocessing**: Re-run OCR with different modes and settings
+- **Status Monitoring**: Track processed images and system status
 
-- The lower quality the screenshot, the worse the script will process the data. 
-- Xbox screenshots basically don't process at all. It really hates the teammate grades specifically. Xbox does some special processing that makes the OCR hate it.
-- Names will regularly have characters like `3`, `a`, `5`, and `b` attached to the end. These should be manually removed.
-- OCR takes a long time to run.
+### Label Studio Integration
+
+- **Automated Task Generation**: Convert OCR results to Label Studio tasks
+- **Pre-filled Annotations**: Bounding boxes and labels automatically generated
+- **YOLO Export**: Export annotations for model training
+- **Docker Integration**: Ready-to-use Label Studio container
+
+### YOLO Training Pipeline
+
+- **Custom Model Training**: Train YOLOv8 models for stat region detection
+- **Dataset Management**: Automatic dataset splitting and validation
+- **Model Export**: Export to ONNX, TorchScript, or TFLite formats
+- **Performance Monitoring**: Track mAP, precision, and recall metrics
+
+## 📁 Project Structure
+
+```
+2k-OCR/
+├── automate_2k.py              # Main OCR processing script
+├── dashboard/                  # Web dashboard
+│   ├── main.py                # FastAPI application
+│   ├── templates/             # HTML templates
+│   └── Dockerfile             # Dashboard container
+├── yolo/                      # YOLO training and models
+│   ├── train_yolo.py          # Training script
+│   ├── data/                  # Dataset directory
+│   └── models/                # Trained models
+├── labelstudio_task_gen.py    # Label Studio task generator
+├── processed/                 # Processed results
+│   ├── images/               # Processed images
+│   └── json/                 # OCR results
+├── toProcess/                # Input directory
+│   └── images/               # Images to process
+├── labelstudio_tasks/        # Generated Label Studio tasks
+├── docker-compose.yml        # Container orchestration
+├── requirements.txt          # Python dependencies
+└── README.md                # This file
+```
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
-Before you begin, ensure you have met the following requirements:
-
-- Python 3.6 or higher
-  - Install via the Microsoft Store
-- Google Cloud account with access to Google Sheets API
-  - Detailed instructions available below
-- Required Python packages (listed below)
-- Copy of the [spreadsheet](https://docs.google.com/spreadsheets/d/1BdKratD66zybUj2ncnw_ySrfJcnXbnq1eHe51ljUK7k/edit?gid=0#gid=0)
-  - Once the spreadsheet is copied (File > Make a Copy):
-  - Copy the `Template` sheet for each player you want to track
-  - Rename that sheet, and in the `SHEET DB` sheet, rename the first row to whatever you renamed the sheet to. The value in `A2` should be the player's username found in `F DB`
-  - For each player you want to add, you will have to copy the entire row in `SHEET DB` and paste it below.
-
-### Setting Up Google Cloud for Google Sheets API
-
-1. **Create a Google Cloud Project**
-
-   - Go to the [Google Cloud Console](https://console.cloud.google.com/).
-   - Click on the project dropdown at the top of the page and select "New Project".
-   - Enter a project name and click "Create".
-
-2. **Enable the Google Sheets API**
-
-   - In the Google Cloud Console, go to the "APIs & Services" > "Library".
-   - Search for "Google Sheets API".
-   - Click on "Google Sheets API" and then click "Enable".
-
-3. **Enable the Google Drive API**
-
-   - In the Google Cloud Console, go to the "APIs & Services" > "Library".
-   - Search for "Google Drive API".
-   - Click on "Google Drive API" and then click "Enable".
-
-4. **Create Credentials**
-
-   - Go to "APIs & Services" > "Credentials".
-   - Click on "Create Credentials" and select "OAuth 2.0 Client IDs".
-   - Configure the consent screen by providing the necessary information.
-   - After configuring the consent screen, select "Application type" as "Desktop app" and click "Create".
-   - Download the `credentials.json` file and save it to your project root directory.
+- Python 3.11+
+- Docker and Docker Compose (for containerized setup)
+- CUDA-capable GPU (optional, for faster processing)
 
 ### Installation
 
-1. **Download the ZIP**
+1. **Clone the repository**
 
-   Open your web browser and go to the URL: https://github.com/wokaa/automate-2k/archive/refs/heads/main.zip
-
-2. **Extract the ZIP File**
-
-   - Locate the downloaded ZIP file on your computer.
-   - Right-click on the ZIP file and select "Extract All...".
-   - Choose a destination folder and click "Extract".
-
-3. **Navigate to the Extracted Folder**
-
-   Open a command prompt or terminal and navigate to the extracted folder:
-   ```sh
-   cd path\to\extracted-folder
+   ```bash
+   git clone <repository-url>
+   cd 2k-OCR
    ```
 
-4. **Set Up Virtual Environment**
+2. **Install dependencies**
 
-   Create and activate a virtual environment:
-
-   ```sh
-   python -m venv venv
-   venv\Scripts\activate  # On Windows
-   ```
-
-5. **Install Dependencies**
-
-   Install the required Python packages:
-
-   ```sh
+   ```bash
    pip install -r requirements.txt
    ```
 
-   The `requirements.txt` file should include:
+3. **Create necessary directories**
 
-   ```txt
-   gspread
-   google-auth
-   google-auth-oauthlib
-   google-auth-httplib2
-   easyocr
-   numpy
-   pillow
-   torch
-   opencv-python
+   ```bash
+   mkdir -p processed/images processed/json toProcess/images
    ```
 
-6. **Google Sheets API Setup**
+### Basic Usage
 
-   - Enable the Google Sheets API and Google Drive API in your Google Cloud Console.
-   - Download the `credentials.json` file and place it in the project root directory.
-   - Run the script to generate the `token.json` file for authentication:
+#### Process Images via CLI
 
-     ```sh
-     python automate_sheet.py
-     ```
+```bash
+# Process a single image
+python automate_2k.py --input path/to/image.jpg --mode legacy
 
-### Usage
+# Process all images in a folder
+python automate_2k.py --input ./toProcess/images --mode yolo
 
-1. **Prepare Input Data**
+# Use custom YOLO model
+python automate_2k.py --input ./toProcess/images --mode yolo --yolo-model ./yolo/models/best.pt
+```
 
-   - Place the game images in the `./toProcess/images/` directory.
-   - Ensure the images are named appropriately (e.g., `game1.png`, `game2.jpg`).
+#### Start Web Dashboard
 
-2. **Run the OCR Processor**
+```bash
+# Run locally
+python dashboard/main.py
 
-   Execute the `automate_2k.py` script to process the images and generate JSON files:
+# Or use Docker Compose
+docker-compose up dashboard
+```
 
-   ```sh
-   python automate_2k.py
-   ```
+#### Generate Label Studio Tasks
 
-   This script will:
-   - Extract data from the images using OCR.
-   - Save the extracted data as JSON files in the `./toProcess/json/` directory.
-   - Move the processed images to the `./processed/images/` directory.
+```bash
+# Generate tasks from processed results
+python labelstudio_task_gen.py --export-yolo
 
-3. **Log Data to Google Sheets**
+# Export for YOLO training
+python labelstudio_task_gen.py --export-yolo --yolo-output ./yolo/data
+```
 
-   Execute the `automate_sheet.py` script to log the extracted data into Google Sheets:
+#### Train YOLO Model
 
-   ```sh
-   python automate_sheet.py
-   ```
+```bash
+# Train with default settings
+python yolo/train_yolo.py --data-dir ./yolo/data --epochs 100
 
-   This script will:
-   - Read the JSON files from the `./toProcess/json/` directory.
-   - Log the data into the specified Google Sheets.
-     - It will ask you which team is the friendly team (i.e., the team YOU played on). This is important, take your time.
-   - Move the processed JSON files to the `./processed/json/` directory.
+# Train with custom parameters
+python yolo/train_yolo.py --data-dir ./yolo/data --model-size m --epochs 200 --batch-size 32
+```
 
-### Configuration
+## 🐳 Docker Setup
 
-- **Google Sheets Configuration**: Update the `SPREADSHEET_NAME`, `F_DB_SHEET`, `O_DB_SHEET`, and `GAME_DB_SHEET` constants in `automate_sheet.py` with your Google Sheets details.
-  - You should only need to update the `SPREADSHEET_NAME`, to whatever the name of your spreadsheet is.
-- **Image and JSON Directories**: Ensure the directories `./toProcess/images/`, `./toProcess/json/`, `./processed/images/`, and `./processed/json/` exist.
-- Update the `correct_common_errors` function with commonly occurring username errors.
-  - For example, `Al Player` is being transformed to `AI Player`.
+### Full System with Docker Compose
 
-### Troubleshooting
+```bash
+# Start all services
+docker-compose up -d
 
-- **Authentication Issues**: Ensure your `credentials.json` and `token.json` files are correctly set up.
-- **OCR Accuracy**: Adjust the OCR settings or preprocess the images for better accuracy.
-- **API Rate Limits**: The script uses exponential backoff to handle rate limits. If you encounter issues, try increasing the delay or reducing the number of requests.
+# Access services
+# Dashboard: http://localhost:8000
+# Label Studio: http://localhost:8080
+```
 
-### Contributing
+### Individual Services
 
-Contributions are welcome. This project was quickly patched together for the NBA 2k25 cycle, and a lot of Copilot was used. It's messy at best.
+```bash
+# Start only Label Studio
+docker-compose up labelstudio
 
-### License
+# Start only dashboard
+docker-compose up dashboard
+```
 
-This project is licensed under the GNU General Public License.
+## 📊 OCR Output Format
 
-### Acknowledgements
+The system generates structured JSON output:
 
-- [Google Sheets API](https://developers.google.com/sheets/api)
-- [EasyOCR](https://github.com/JaidedAI/EasyOCR)
-- [OpenCV](https://opencv.org/)
-- [PyTorch](https://pytorch.org/)
+```json
+{
+  "players": [
+    {
+      "player_number": 1,
+      "position": "PG",
+      "team": "team1",
+      "name": "Player Name",
+      "grade": "A+",
+      "points": "25",
+      "rebounds": "5",
+      "assists": "8",
+      "steals": "2",
+      "blocks": "0",
+      "fouls": "1",
+      "tos": "2",
+      "FGM": "10",
+      "FGA": "18",
+      "3PM": "3",
+      "3PA": "7",
+      "FTM": "2",
+      "FTA": "2"
+    }
+  ],
+  "teams": {
+    "team1_quarters": {
+      "quarter_1": "28",
+      "quarter_2": "32",
+      "quarter_3": "25",
+      "quarter_4": "30"
+    },
+    "team2_quarters": {
+      "quarter_1": "25",
+      "quarter_2": "30",
+      "quarter_3": "28",
+      "quarter_4": "35"
+    }
+  },
+  "hash": "abc123...",
+  "image_path": "/path/to/image.jpg",
+  "mode": "legacy"
+}
+```
 
----
+## 🎯 YOLO Training
 
-Feel free to reach out if you have any questions or need further assistance. Happy coding!
+### Dataset Preparation
+
+1. Process images with OCR to generate initial results
+2. Generate Label Studio tasks: `python labelstudio_task_gen.py --export-yolo`
+3. Review and correct annotations in Label Studio
+4. Export corrected annotations back to YOLO format
+
+### Training Configuration
+
+```bash
+# Basic training
+python yolo/train_yolo.py --data-dir ./yolo/data --epochs 100
+
+# Advanced training
+python yolo/train_yolo.py \
+  --data-dir ./yolo/data \
+  --model-size m \
+  --epochs 200 \
+  --batch-size 32 \
+  --split-dataset
+```
+
+### Model Classes
+
+The system detects 13 different stat regions:
+
+- `name`, `grade`, `points`, `rebounds`, `assists`, `steals`
+- `blocks`, `fouls`, `tos`, `FGMFGA`, `3PM3PA`, `FTMFTA`, `team_quarter`
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```bash
+# Dashboard settings
+DASHBOARD_HOST=0.0.0.0
+DASHBOARD_PORT=8000
+
+# Label Studio settings
+LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/data
+```
+
+### Custom Coordinates
+
+Modify the coordinate constants in `automate_2k.py` for different screen resolutions:
+
+```python
+BASE_X_PLAYER = 1219
+PLAYER_Y_COORDINATES = [520, 602, 683, 765, 843, 1148, 1233, 1318, 1398, 1479]
+```
+
+## 📈 Performance Optimization
+
+### GPU Acceleration
+
+- Install CUDA for GPU-accelerated YOLO training
+- Use `--device 0` for specific GPU selection
+- Enable mixed precision training with `--half`
+
+### Batch Processing
+
+- Adjust batch size based on available memory
+- Use `--batch-size 32` for larger models
+- Monitor GPU memory usage during training
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**OCR Accuracy Issues**
+
+- Ensure images are high quality (1920x1080 or higher)
+- Check image orientation and lighting
+- Try different OCR modes (legacy vs YOLO)
+
+**YOLO Training Issues**
+
+- Verify dataset structure matches expected format
+- Check class labels in dataset.yaml
+- Monitor training loss and validation metrics
+
+**Docker Issues**
+
+- Ensure ports 8000 and 8080 are available
+- Check volume mount permissions
+- Verify Docker and Docker Compose versions
+
+### Logs and Debugging
+
+```bash
+# View dashboard logs
+docker-compose logs dashboard
+
+# View Label Studio logs
+docker-compose logs labelstudio
+
+# Check OCR processing logs
+python automate_2k.py --input test.jpg --mode legacy
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- [Ultralytics](https://github.com/ultralytics/ultralytics) for YOLOv8
+- [EasyOCR](https://github.com/JaidedAI/EasyOCR) for text recognition
+- [Label Studio](https://github.com/heartexlabs/label-studio) for annotation
+- [FastAPI](https://fastapi.tiangolo.com/) for the web framework
+
+## 📞 Support
+
+For issues and questions:
+
+- Create an issue on GitHub
+- Check the troubleshooting section
+- Review the logs for error details

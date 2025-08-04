@@ -9,6 +9,10 @@ import torch
 import logging
 import hashlib
 import cv2
+import argparse
+from pathlib import Path
+from ultralytics import YOLO
+import yaml
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -16,9 +20,10 @@ PLAYERS = 10
 TEAM1_QUARTERS = 4
 TEAM2_QUARTERS = 4
 
-JSON_OUTPUT_FOLDER = './toProcess/json/'
+JSON_OUTPUT_FOLDER = './processed/json/'
 IMAGE_INPUT_FOLDER = './toProcess/images/'
 IMAGE_OUTPUT_FOLDER = './processed/images/'
+YOLO_MODEL_PATH = './yolo/models/2k_stats_detector/weights/best.pt'
 
 BASE_X_PLAYER = 1219
 PLAYER_Y_COORDINATES = [520, 602, 683, 765, 843, 1148, 1233, 1318, 1398, 1479]
@@ -71,8 +76,58 @@ if cuda_available:
 else:
     logging.info("Running on CPU")
 
+class YOLODetector:
+    def __init__(self, model_path=None):
+        self.model_path = model_path or YOLO_MODEL_PATH
+        self.model = None
+        self.load_model()
+    
+    def load_model(self):
+        """Load YOLO model for stat region detection"""
+        try:
+            if os.path.exists(self.model_path):
+                self.model = YOLO(self.model_path)
+                logging.info(f"Loaded YOLO model from {self.model_path}")
+            else:
+                logging.warning(f"YOLO model not found at {self.model_path}, using default YOLOv8n")
+                self.model = YOLO('yolov8n.pt')
+        except Exception as e:
+            logging.error(f"Error loading YOLO model: {e}")
+            self.model = None
+    
+    def detect_regions(self, image_path):
+        """Detect stat regions using YOLO model"""
+        if not self.model:
+            logging.warning("YOLO model not available, falling back to legacy mode")
+            return None
+        
+        try:
+            results = self.model(image_path)
+            detections = []
+            
+            for result in results:
+                boxes = result.boxes
+                if boxes is not None:
+                    for box in boxes:
+                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                        conf = box.conf[0].cpu().numpy()
+                        cls = int(box.cls[0].cpu().numpy())
+                        
+                        detections.append({
+                            'bbox': [int(x1), int(y1), int(x2), int(y2)],
+                            'confidence': float(conf),
+                            'class': cls
+                        })
+            
+            return detections
+        except Exception as e:
+            logging.error(f"Error in YOLO detection: {e}")
+            return None
+
 class OCRProcessor:
-    def __init__(self):
+    def __init__(self, mode='legacy', yolo_model_path=None):
+        self.mode = mode
+        self.yolo_detector = YOLODetector(yolo_model_path) if mode == 'yolo' else None
         self.regions = self.generate_regions()
 
     def generate_regions(self):
@@ -123,6 +178,17 @@ class OCRProcessor:
         image = Image.open(image_path)
         width, height = image.size
 
+        if self.mode == 'yolo' and self.yolo_detector:
+            # Use YOLO detections if available
+            detections = self.yolo_detector.detect_regions(image_path)
+            if detections:
+                return self.crop_yolo_regions(image, detections)
+        
+        # Fall back to legacy mode
+        return self.crop_legacy_regions(image, width, height)
+
+    def crop_legacy_regions(self, image, width, height):
+        """Legacy region cropping based on fixed coordinates"""
         cropped_images = []
         region_names = []
 
@@ -136,6 +202,42 @@ class OCRProcessor:
             region_names.append(region['name'])
 
         return cropped_images, region_names
+
+    def crop_yolo_regions(self, image, detections):
+        """Crop regions based on YOLO detections"""
+        cropped_images = []
+        region_names = []
+        
+        # Sort detections by confidence and class
+        sorted_detections = sorted(detections, key=lambda x: (x['class'], -x['confidence']))
+        
+        for i, detection in enumerate(sorted_detections):
+            x1, y1, x2, y2 = detection['bbox']
+            cropped_image = image.crop((x1, y1, x2, y2))
+            cropped_images.append(cropped_image)
+            
+            # Map detection class to region name
+            region_name = self.map_detection_to_region(detection['class'], i)
+            region_names.append(region_name)
+        
+        return cropped_images, region_names
+
+    def map_detection_to_region(self, class_id, index):
+        """Map YOLO detection class to region name"""
+        # This mapping should be based on your YOLO training classes
+        # For now, using a simple mapping - adjust based on your training
+        stat_types = ['name', 'grade', 'points', 'rebounds', 'assists', 'steals', 
+                     'blocks', 'fouls', 'tos', 'FGMFGA', '3PM3PA', 'FTMFTA']
+        
+        player_num = (index // len(stat_types)) + 1
+        stat_type = stat_types[index % len(stat_types)]
+        
+        if player_num <= 10:
+            return f'player{player_num}_{stat_type}'
+        else:
+            team_num = 1 if player_num <= 15 else 2
+            quarter = ((player_num - 11) % 4) + 1
+            return f'team{team_num}_q{quarter}'
 
     @staticmethod
     def filter_text(text):
@@ -251,32 +353,45 @@ class OCRProcessor:
 
         return formatted_output
 
+    def process_single_image(self, image_path, output_folder):
+        """Process a single image and return results"""
+        logging.info(f'Processing file: {image_path}')
+
+        cropped_images, region_names = self.crop_and_save_regions(image_path)
+
+        ocr_results = []
+        for cropped_image, region_name in zip(cropped_images, region_names):
+            allowlist = self.get_allowlist(region_name)
+            ocr_text = self.detect_text_in_image(cropped_image, region_name, allowlist=allowlist)
+            ocr_results.append(ocr_text)
+
+        formatted_results = self.format_ocr_results(ocr_results, region_names)
+
+        # Generate hash of the formatted results
+        results_json_str = json.dumps(formatted_results, sort_keys=True)
+        results_hash = hashlib.sha256(results_json_str.encode('utf-8')).hexdigest()
+        formatted_results['hash'] = results_hash
+        formatted_results['image_path'] = image_path
+        formatted_results['mode'] = self.mode
+
+        # Save results
+        filename = os.path.basename(image_path)
+        output_json_path = os.path.join(output_folder, f'{filename}_results.json')
+        with open(output_json_path, 'w') as json_file:
+            json.dump(formatted_results, json_file, indent=4)
+        logging.info(f'Formatted results saved to {output_json_path}')
+
+        return formatted_results
+
     def process_images(self, input_folder, output_folder):
+        """Process all images in a folder"""
+        os.makedirs(output_folder, exist_ok=True)
+        os.makedirs(IMAGE_OUTPUT_FOLDER, exist_ok=True)
 
         for filename in os.listdir(input_folder):
             if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
                 input_image_path = os.path.join(input_folder, filename)
-                logging.info(f'Processing file: {input_image_path}')
-
-                cropped_images, region_names = self.crop_and_save_regions(input_image_path)
-
-                ocr_results = []
-                for cropped_image, region_name in zip(cropped_images, region_names):
-                    allowlist = self.get_allowlist(region_name)
-                    ocr_text = self.detect_text_in_image(cropped_image, region_name, allowlist=allowlist)
-                    ocr_results.append(ocr_text)
-
-                formatted_results = self.format_ocr_results(ocr_results, region_names)
-
-                # Generate hash of the formatted results
-                results_json_str = json.dumps(formatted_results, sort_keys=True)
-                results_hash = hashlib.sha256(results_json_str.encode('utf-8')).hexdigest()
-                formatted_results['hash'] = results_hash
-
-                output_json_path = os.path.join(output_folder, f'{filename}_results.json')
-                with open(output_json_path, 'w') as json_file:
-                    json.dump(formatted_results, json_file, indent=4)
-                logging.info(f'Formatted results saved to {output_json_path}')
+                self.process_single_image(input_image_path, output_folder)
 
                 # Move processed image to IMAGE_OUTPUT_FOLDER
                 shutil.move(input_image_path, os.path.join(IMAGE_OUTPUT_FOLDER, filename))
@@ -316,11 +431,30 @@ class OCRProcessor:
         return '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+-_/ '
 
 def main():
-    input_folder = IMAGE_INPUT_FOLDER
-    output_folder = JSON_OUTPUT_FOLDER
+    parser = argparse.ArgumentParser(description='NBA 2K Box Score OCR Processor')
+    parser.add_argument('--input', '-i', default=IMAGE_INPUT_FOLDER, 
+                       help='Input folder or image path')
+    parser.add_argument('--output', '-o', default=JSON_OUTPUT_FOLDER,
+                       help='Output folder for JSON results')
+    parser.add_argument('--mode', '-m', choices=['yolo', 'legacy'], default='legacy',
+                       help='Processing mode: yolo (YOLO detection) or legacy (fixed coordinates)')
+    parser.add_argument('--yolo-model', default=YOLO_MODEL_PATH,
+                       help='Path to YOLO model weights')
+    
+    args = parser.parse_args()
 
-    ocr_processor = OCRProcessor()
-    ocr_processor.process_images(input_folder, output_folder)
+    # Create output directories
+    os.makedirs(args.output, exist_ok=True)
+    os.makedirs(IMAGE_OUTPUT_FOLDER, exist_ok=True)
+
+    ocr_processor = OCRProcessor(mode=args.mode, yolo_model_path=args.yolo_model)
+
+    if os.path.isfile(args.input):
+        # Process single image
+        ocr_processor.process_single_image(args.input, args.output)
+    else:
+        # Process folder
+        ocr_processor.process_images(args.input, args.output)
 
 if __name__ == "__main__":
     main()

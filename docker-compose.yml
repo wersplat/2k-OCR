@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Label Studio for annotation
+  labelstudio:
+    image: heartexlabs/label-studio:latest
+    container_name: nba2k-labelstudio
+    ports:
+      - "8080:8080"
+    environment:
+      - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/data
+    volumes:
+      - ./processed:/data
+      - ./labelstudio_tasks:/labelstudio_tasks
+      - labelstudio_data:/label-studio/data
+    command: label-studio start --host 0.0.0.0 --port 8080
+    restart: unless-stopped
+    networks:
+      - nba2k-network
+
+  # Web Dashboard
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    container_name: nba2k-dashboard
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./processed:/app/processed
+      - ./toProcess:/app/toProcess
+      - ./yolo:/app/yolo
+    environment:
+      - PYTHONPATH=/app
+    depends_on:
+      - labelstudio
+    restart: unless-stopped
+    networks:
+      - nba2k-network
+
+  # Optional: Redis for caching (if needed)
+  redis:
+    image: redis:7-alpine
+    container_name: nba2k-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - nba2k-network
+
+volumes:
+  labelstudio_data:
+  redis_data:
+
+networks:
+  nba2k-network:
+    driver: bridge 

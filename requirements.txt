@@ -10,4 +10,13 @@ torch
 torchvision
 torchaudio
 ultralytics>=8.0.0
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart
+jinja2
+aiofiles
+label-studio>=1.9.0
+python-dotenv
+pydantic
+httpx
 

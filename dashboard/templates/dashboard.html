@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NBA 2K OCR Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .main-content {
+            background-color: #f8f9fa;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover {
+            border-color: #667eea;
+            background-color: #f8f9ff;
+        }
+        .upload-area.dragover {
+            border-color: #667eea;
+            background-color: #e8f2ff;
+        }
+        .result-card {
+            transition: transform 0.2s ease;
+        }
+        .result-card:hover {
+            transform: translateY(-2px);
+        }
+        .status-badge {
+            font-size: 0.8rem;
+        }
+        .image-preview {
+            max-width: 200px;
+            max-height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        .stats-table {
+            font-size: 0.9rem;
+        }
+        .loading {
+            display: none;
+        }
+        .loading.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar text-white p-4">
+                <h4 class="mb-4">
+                    <i class="fas fa-basketball-ball me-2"></i>
+                    NBA 2K OCR
+                </h4>
+                
+                <div class="mb-4">
+                    <h6 class="text-light">Quick Stats</h6>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Processed:</span>
+                        <span id="processed-count">-</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Available:</span>
+                        <span id="available-count">-</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Pending:</span>
+                        <span id="pending-count">-</span>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h6 class="text-light">Actions</h6>
+                    <button class="btn btn-outline-light btn-sm w-100 mb-2" onclick="refreshStats()">
+                        <i class="fas fa-sync-alt me-1"></i> Refresh
+                    </button>
+                    <button class="btn btn-outline-light btn-sm w-100 mb-2" onclick="openLabelStudio()">
+                        <i class="fas fa-tags me-1"></i> Label Studio
+                    </button>
+                </div>
+
+                <div class="mb-4">
+                    <h6 class="text-light">OCR Mode</h6>
+                    <select class="form-select form-select-sm" id="ocr-mode">
+                        <option value="legacy">Legacy (Fixed)</option>
+                        <option value="yolo">YOLO (Detection)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 main-content p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>OCR Results Dashboard</h2>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                        <i class="fas fa-upload me-2"></i>Upload Image
+                    </button>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div class="loading text-center py-4" id="loading">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Processing image...</p>
+                </div>
+
+                <!-- Results Grid -->
+                <div class="row" id="results-grid">
+                    {% for file in processed_files %}
+                    <div class="col-lg-6 col-xl-4 mb-4">
+                        <div class="card result-card h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <h6 class="card-title text-truncate">{{ file.image_name }}</h6>
+                                    <span class="badge bg-secondary status-badge">{{ file.mode }}</span>
+                                </div>
+                                
+                                {% if file.image_path %}
+                                <img src="{{ file.image_path }}" class="image-preview mb-3" alt="Screenshot">
+                                {% endif %}
+                                
+                                <div class="mb-3">
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>{{ file.timestamp }}
+                                    </small>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <span class="badge bg-info me-1">{{ file.player_count }} players</span>
+                                    <small class="text-muted">Hash: {{ file.hash[:8] }}...</small>
+                                </div>
+                                
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="viewResults('{{ file.json_path }}')">
+                                        <i class="fas fa-eye me-1"></i>View
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-warning" onclick="reprocessImage('{{ file.image_name }}')">
+                                        <i class="fas fa-redo me-1"></i>Reprocess
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% if not processed_files %}
+                <div class="text-center py-5">
+                    <i class="fas fa-images fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No processed images yet</h5>
+                    <p class="text-muted">Upload your first NBA 2K screenshot to get started!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Upload NBA 2K Screenshot</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-area" id="upload-area">
+                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                        <h5>Drag & Drop or Click to Upload</h5>
+                        <p class="text-muted">Supports PNG, JPG, JPEG files</p>
+                        <input type="file" id="file-input" accept=".png,.jpg,.jpeg" style="display: none;">
+                        <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
+                            Choose File
+                        </button>
+                    </div>
+                    <div id="upload-progress" class="mt-3" style="display: none;">
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <small class="text-muted">Processing...</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Modal -->
+    <div class="modal fade" id="resultsModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">OCR Results</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="results-content"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let currentResults = null;
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshStats();
+            setupUploadHandlers();
+        });
+
+        // Setup upload handlers
+        function setupUploadHandlers() {
+            const uploadArea = document.getElementById('upload-area');
+            const fileInput = document.getElementById('file-input');
+
+            // Drag and drop handlers
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFileUpload(files[0]);
+                }
+            });
+
+            // File input handler
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFileUpload(e.target.files[0]);
+                }
+            });
+        }
+
+        // Handle file upload
+        async function handleFileUpload(file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const progressDiv = document.getElementById('upload-progress');
+            const progressBar = progressDiv.querySelector('.progress-bar');
+            
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '50%';
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                progressBar.style.width = '100%';
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert('Image processed successfully!');
+                    location.reload(); // Refresh to show new results
+                } else {
+                    const error = await response.json();
+                    alert(`Error: ${error.detail}`);
+                }
+            } catch (error) {
+                alert(`Upload failed: ${error.message}`);
+            } finally {
+                progressDiv.style.display = 'none';
+                progressBar.style.width = '0%';
+                document.getElementById('file-input').value = '';
+            }
+        }
+
+        // Refresh statistics
+        async function refreshStats() {
+            try {
+                const response = await fetch('/api/status');
+                const stats = await response.json();
+                
+                document.getElementById('processed-count').textContent = stats.processed_images;
+                document.getElementById('available-count').textContent = stats.available_images;
+                document.getElementById('pending-count').textContent = stats.pending_uploads;
+            } catch (error) {
+                console.error('Error fetching stats:', error);
+            }
+        }
+
+        // View results
+        async function viewResults(jsonPath) {
+            try {
+                const response = await fetch(jsonPath);
+                const results = await response.json();
+                currentResults = results;
+                
+                const content = document.getElementById('results-content');
+                content.innerHTML = generateResultsHTML(results);
+                
+                new bootstrap.Modal(document.getElementById('resultsModal')).show();
+            } catch (error) {
+                alert(`Error loading results: ${error.message}`);
+            }
+        }
+
+        // Generate results HTML
+        function generateResultsHTML(results) {
+            let html = '<div class="row">';
+            
+            // Players section
+            html += '<div class="col-md-8">';
+            html += '<h6>Player Statistics</h6>';
+            html += '<div class="table-responsive">';
+            html += '<table class="table table-sm stats-table">';
+            html += '<thead><tr><th>Player</th><th>Team</th><th>Pos</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>Grade</th></tr></thead>';
+            html += '<tbody>';
+            
+            results.players.forEach(player => {
+                html += `<tr>
+                    <td>${player.name}</td>
+                    <td>${player.team}</td>
+                    <td>${player.position}</td>
+                    <td>${player.points || '0'}</td>
+                    <td>${player.rebounds || '0'}</td>
+                    <td>${player.assists || '0'}</td>
+                    <td>${player.steals || '0'}</td>
+                    <td>${player.blocks || '0'}</td>
+                    <td>${player.grade || 'C'}</td>
+                </tr>`;
+            });
+            
+            html += '</tbody></table></div></div>';
+            
+            // Teams section
+            html += '<div class="col-md-4">';
+            html += '<h6>Team Quarters</h6>';
+            html += '<div class="row">';
+            html += '<div class="col-6"><strong>Team 1</strong><br>';
+            Object.entries(results.teams.team1_quarters).forEach(([quarter, score]) => {
+                html += `${quarter}: ${score}<br>`;
+            });
+            html += '</div>';
+            html += '<div class="col-6"><strong>Team 2</strong><br>';
+            Object.entries(results.teams.team2_quarters).forEach(([quarter, score]) => {
+                html += `${quarter}: ${score}<br>`;
+            });
+            html += '</div></div></div>';
+            
+            html += '</div>';
+            
+            return html;
+        }
+
+        // Reprocess image
+        async function reprocessImage(imageName) {
+            const mode = document.getElementById('ocr-mode').value;
+            
+            if (!confirm(`Reprocess ${imageName} with ${mode} mode?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/reprocess/${imageName}_results.json?mode=${mode}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    alert('Image reprocessed successfully!');
+                    location.reload();
+                } else {
+                    const error = await response.json();
+                    alert(`Error: ${error.detail}`);
+                }
+            } catch (error) {
+                alert(`Reprocessing failed: ${error.message}`);
+            }
+        }
+
+        // Open Label Studio
+        async function openLabelStudio() {
+            try {
+                const response = await fetch('/api/labelstudio');
+                const result = await response.json();
+                
+                if (result.url) {
+                    window.open(result.url, '_blank');
+                } else {
+                    alert(result.message);
+                }
+            } catch (error) {
+                alert('Label Studio integration not available');
+            }
+        }
+    </script>
+</body>
+</html> 
