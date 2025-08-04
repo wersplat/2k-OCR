@@ -1,47 +1,78 @@
-# NBA 2K OCR System Configuration
-
-# OCR Processing Settings
 ocr:
-  # Processing mode: 'legacy' (fixed coordinates) or 'yolo' (detection-based)
-  default_mode: "legacy"
-  
-  # YOLO model path (relative to project root)
-  yolo_model_path: "./yolo/models/2k_stats_detector/weights/best.pt"
-  
-  # Image processing settings
+  default_mode: legacy
+  yolo_model_path: ./yolo/models/2k_stats_detector/weights/best.pt
   image:
-    # Supported image formats
-    supported_formats: [".png", ".jpg", ".jpeg"]
-    
-    # Target resolution for processing (width x height)
-    target_resolution: [3840, 2160]
-    
-    # OCR confidence threshold
+    supported_formats:
+    - .png
+    - .jpg
+    - .jpeg
+    target_resolution:
+    - 3840
+    - 2160
     confidence_threshold: 0.3
-
-# Coordinate settings for stat regions (normalized for 3840x2160)
 coordinates:
-  # Player stat regions
   player:
     base_x: 1219
-    y_positions: [520, 602, 683, 765, 843, 1148, 1233, 1318, 1398, 1479]
-    
-    # Stat column widths and positions
+    y_positions:
+    - 520
+    - 602
+    - 683
+    - 765
+    - 843
+    - 1148
+    - 1233
+    - 1318
+    - 1398
+    - 1479
     stats:
-      name: {width: 485, height: 81, x_offset: 0}
-      grade: {width: 105, height: 77, x_offset: 480}
-      points: {width: 135, height: 77, x_offset: 620}
-      rebounds: {width: 135, height: 77, x_offset: 777}
-      assists: {width: 135, height: 77, x_offset: 923}
-      steals: {width: 135, height: 77, x_offset: 1075}
-      blocks: {width: 135, height: 77, x_offset: 1224}
-      fouls: {width: 135, height: 77, x_offset: 1368}
-      tos: {width: 135, height: 77, x_offset: 1513}
-      FGMFGA: {width: 205, height: 77, x_offset: 1665}
-      3PM3PA: {width: 205, height: 77, x_offset: 1898}
-      FTMFTA: {width: 205, height: 77, x_offset: 2099}
-  
-  # Team quarter regions
+      name:
+        width: 485
+        height: 81
+        x_offset: 0
+      grade:
+        width: 105
+        height: 77
+        x_offset: 480
+      points:
+        width: 135
+        height: 77
+        x_offset: 620
+      rebounds:
+        width: 135
+        height: 77
+        x_offset: 777
+      assists:
+        width: 135
+        height: 77
+        x_offset: 923
+      steals:
+        width: 135
+        height: 77
+        x_offset: 1075
+      blocks:
+        width: 135
+        height: 77
+        x_offset: 1224
+      fouls:
+        width: 135
+        height: 77
+        x_offset: 1368
+      tos:
+        width: 135
+        height: 77
+        x_offset: 1513
+      FGMFGA:
+        width: 205
+        height: 77
+        x_offset: 1665
+      3PM3PA:
+        width: 205
+        height: 77
+        x_offset: 1898
+      FTMFTA:
+        width: 205
+        height: 77
+        x_offset: 2099
   team:
     base_x: 317
     team1_y: 778
@@ -49,136 +80,140 @@ coordinates:
     x_offset: 110
     width: 85
     height: 145
-
-# Dashboard Settings
 dashboard:
-  host: "0.0.0.0"
+  host: 0.0.0.0
   port: 8000
   debug: false
-  
-  # File upload settings
   upload:
-    max_file_size: 10485760  # 10MB
-    allowed_extensions: [".png", ".jpg", ".jpeg"]
-
-# Label Studio Settings
+    max_file_size: 10485760
+    allowed_extensions:
+    - .png
+    - .jpg
+    - .jpeg
+  api:
+    enabled: true
+    rate_limit:
+      requests_per_minute: 60
+      burst_size: 10
+    cors:
+      allowed_origins:
+      - http://localhost:3000
+      - http://localhost:8000
+      allowed_methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      allowed_headers:
+      - '*'
 labelstudio:
-  host: "0.0.0.0"
+  host: 0.0.0.0
   port: 8080
-  
-  # Label configuration
+  auth:
+    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6ODA2MTQ3OTkwMSwiaWF0IjoxNzU0Mjc5OTAxLCJqdGkiOiI1ZmFmNzEwOGNjOWI0ODFkYTMzMjg4YjQyM2JlMzY4ZiIsInVzZXJfaWQiOjF9.1ecWQXHxqkEhydNXFRAykJqKzlGBQdu9S1gl276eHTo
+    api_url: http://localhost:8080/api
+    headers:
+      Authorization: Token {token}
+      Content-Type: application/json
+  project:
+    name: NBA 2K OCR Project
+    description: NBA 2K Box Score OCR Annotation Project
+    label_config: "<View>\n  <Image name=\"image\" value=\"$image\" zoom=\"true\"\
+      \ zoomControl=\"true\" rotateControl=\"true\"/>\n  <RectangleLabels name=\"\
+      label\" toName=\"image\">\n    <Label value=\"name\" background=\"red\"/>\n\
+      \    <Label value=\"grade\" background=\"blue\"/>\n    <Label value=\"points\"\
+      \ background=\"green\"/>\n    <Label value=\"rebounds\" background=\"yellow\"\
+      />\n    <Label value=\"assists\" background=\"orange\"/>\n    <Label value=\"\
+      steals\" background=\"purple\"/>\n    <Label value=\"blocks\" background=\"\
+      pink\"/>\n    <Label value=\"fouls\" background=\"brown\"/>\n    <Label value=\"\
+      tos\" background=\"gray\"/>\n    <Label value=\"FGMFGA\" background=\"cyan\"\
+      />\n    <Label value=\"3PM3PA\" background=\"magenta\"/>\n    <Label value=\"\
+      FTMFTA\" background=\"lime\"/>\n    <Label value=\"team_quarter\" background=\"\
+      navy\"/>\n  </RectangleLabels>\n</View>\n"
   labels:
-    - name: "name"
-      background: "red"
-    - name: "grade"
-      background: "blue"
-    - name: "points"
-      background: "green"
-    - name: "rebounds"
-      background: "yellow"
-    - name: "assists"
-      background: "orange"
-    - name: "steals"
-      background: "purple"
-    - name: "blocks"
-      background: "pink"
-    - name: "fouls"
-      background: "brown"
-    - name: "tos"
-      background: "gray"
-    - name: "FGMFGA"
-      background: "cyan"
-    - name: "3PM3PA"
-      background: "magenta"
-    - name: "FTMFTA"
-      background: "lime"
-    - name: "team_quarter"
-      background: "navy"
-
-# YOLO Training Settings
+  - name: name
+    background: red
+  - name: grade
+    background: blue
+  - name: points
+    background: green
+  - name: rebounds
+    background: yellow
+  - name: assists
+    background: orange
+  - name: steals
+    background: purple
+  - name: blocks
+    background: pink
+  - name: fouls
+    background: brown
+  - name: tos
+    background: gray
+  - name: FGMFGA
+    background: cyan
+  - name: 3PM3PA
+    background: magenta
+  - name: FTMFTA
+    background: lime
+  - name: team_quarter
+    background: navy
 yolo:
-  # Model configuration
   model:
-    size: "n"  # n, s, m, l, x
+    size: n
     epochs: 100
     batch_size: 16
     image_size: 640
-  
-  # Training parameters
   training:
     learning_rate: 0.001
     weight_decay: 0.0005
     momentum: 0.937
     warmup_epochs: 3
     patience: 20
-    
-  # Dataset settings
   dataset:
     train_split: 0.8
     validation_split: 0.2
-    
-  # Class names for detection
   classes:
-    - "name"
-    - "grade"
-    - "points"
-    - "rebounds"
-    - "assists"
-    - "steals"
-    - "blocks"
-    - "fouls"
-    - "tos"
-    - "FGMFGA"
-    - "3PM3PA"
-    - "FTMFTA"
-    - "team_quarter"
-
-# File Paths
+  - name
+  - grade
+  - points
+  - rebounds
+  - assists
+  - steals
+  - blocks
+  - fouls
+  - tos
+  - FGMFGA
+  - 3PM3PA
+  - FTMFTA
+  - team_quarter
 paths:
-  # Input and output directories
-  input_images: "./toProcess/images"
-  processed_images: "./processed/images"
-  processed_json: "./processed/json"
-  labelstudio_tasks: "./labelstudio_tasks"
-  
-  # YOLO directories
-  yolo_data: "./yolo/data"
-  yolo_models: "./yolo/models"
-  yolo_weights: "./yolo/models/2k_stats_detector/weights"
-
-# Logging Configuration
+  input_images: ./toProcess/images
+  processed_images: ./processed/images
+  processed_json: ./processed/json
+  labelstudio_tasks: ./labelstudio_tasks
+  yolo_data: ./yolo/data
+  yolo_models: ./yolo/models
+  yolo_weights: ./yolo/models/2k_stats_detector/weights
 logging:
-  level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  file: "./logs/nba2k_ocr.log"
-
-# Performance Settings
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file: ./logs/nba2k_ocr.log
 performance:
-  # GPU settings
   gpu:
     enabled: true
-    device: "auto"  # auto, 0, 1, etc.
-    
-  # Memory settings
+    device: auto
   memory:
     max_workers: 4
     batch_size: 8
-    
-  # Caching
   cache:
     enabled: true
     max_size: 1000
-    ttl: 3600  # seconds
-
-# Error Handling
+    ttl: 3600
 error_handling:
-  # Retry settings
   retries:
     max_attempts: 3
-    delay: 1.0  # seconds
+    delay: 1.0
     backoff: 2.0
-    
-  # Validation
   validation:
     strict_mode: false
-    allow_partial_results: true 
+    allow_partial_results: true

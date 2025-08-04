@@ -1,14 +1,23 @@
 import os
 import json
 import shutil
+import yaml
 from pathlib import Path
 from typing import List, Optional
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 from datetime import datetime
 import logging
+
+# Import Label Studio client
+try:
+    from labelstudio_client import LabelStudioClient
+    LABELSTUDIO_AVAILABLE = True
+except ImportError:
+    LABELSTUDIO_AVAILABLE = False
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -16,6 +25,15 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(title="NBA 2K OCR Dashboard", version="1.0.0")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:8000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Setup directories
 BASE_DIR = Path(__file__).parent.parent
@@ -27,6 +45,27 @@ UPLOAD_DIR = BASE_DIR / "toProcess" / "images"
 # Create directories if they don't exist
 for dir_path in [PROCESSED_DIR, IMAGES_DIR, JSON_DIR, UPLOAD_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
+
+# Load configuration
+def load_config():
+    try:
+        with open(BASE_DIR / "config.yaml", 'r') as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        logger.error(f"Error loading config: {e}")
+        return {}
+
+config = load_config()
+
+# Initialize Label Studio client if available
+labelstudio_client = None
+if LABELSTUDIO_AVAILABLE:
+    try:
+        labelstudio_client = LabelStudioClient()
+        logger.info("✅ Label Studio client initialized")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize Label Studio client: {e}")
+        labelstudio_client = None
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
@@ -68,6 +107,10 @@ async def dashboard(request: Request):
                     <h3>🤖 YOLO Model</h3>
                     <p id="model-status">Loading...</p>
                 </div>
+                <div class="stat-card">
+                    <h3>🏷️ Label Studio</h3>
+                    <p id="labelstudio-status">Loading...</p>
+                </div>
             </div>
             
             <div class="upload-area">
@@ -81,6 +124,18 @@ async def dashboard(request: Request):
             <div id="results">
                 <h3>📊 Recent Results</h3>
                 <div id="results-list">Loading...</div>
+            </div>
+            
+            <div id="labelstudio-section" style="margin-top: 30px;">
+                <h3>🏷️ Label Studio Integration</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
+                    <button onclick="syncLabelStudio()" class="btn btn-primary">Sync with Label Studio</button>
+                    <button onclick="openLabelStudio()" class="btn btn-secondary">Open Label Studio</button>
+                    <button onclick="getProjects()" class="btn btn-info">Get Projects</button>
+                </div>
+                <div id="labelstudio-results" style="background: white; padding: 20px; border-radius: 10px; margin-top: 20px;">
+                    <p>Label Studio integration ready</p>
+                </div>
             </div>
         </div>
         
@@ -103,6 +158,21 @@ async def dashboard(request: Request):
                     document.getElementById('processed-count').textContent = data.processed_images;
                     document.getElementById('pending-count').textContent = data.pending_uploads;
                     document.getElementById('model-status').textContent = data.ocr_mode;
+                    
+                    // Update Label Studio status
+                    if (data.labelstudio_available) {
+                        document.getElementById('labelstudio-status').textContent = data.labelstudio_status;
+                        if (data.labelstudio_status === 'connected') {
+                            document.getElementById('labelstudio-status').style.color = 'green';
+                        } else if (data.labelstudio_status === 'disconnected') {
+                            document.getElementById('labelstudio-status').style.color = 'orange';
+                        } else {
+                            document.getElementById('labelstudio-status').style.color = 'red';
+                        }
+                    } else {
+                        document.getElementById('labelstudio-status').textContent = 'Not available';
+                        document.getElementById('labelstudio-status').style.color = 'gray';
+                    }
                     
                     loadResults();
                 } catch (error) {
@@ -150,6 +220,55 @@ async def dashboard(request: Request):
                     loadStatus();
                 } catch (error) {
                     statusDiv.innerHTML = '<p style="color: red;">Upload failed</p>';
+                }
+            }
+            
+            // Label Studio functions
+            async function syncLabelStudio() {
+                try {
+                    const response = await fetch('/api/labelstudio/sync', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    const resultsDiv = document.getElementById('labelstudio-results');
+                    if (result.success) {
+                        resultsDiv.innerHTML = '<p style="color: green;">✅ ' + result.message + '</p>';
+                    } else {
+                        resultsDiv.innerHTML = '<p style="color: red;">❌ ' + result.message + '</p>';
+                    }
+                } catch (error) {
+                    document.getElementById('labelstudio-results').innerHTML = '<p style="color: red;">❌ Sync failed: ' + error.message + '</p>';
+                }
+            }
+            
+            async function openLabelStudio() {
+                try {
+                    window.open('http://localhost:8080', '_blank');
+                    document.getElementById('labelstudio-results').innerHTML = '<p style="color: blue;">🌐 Opening Label Studio...</p>';
+                } catch (error) {
+                    document.getElementById('labelstudio-results').innerHTML = '<p style="color: red;">❌ Could not open Label Studio</p>';
+                }
+            }
+            
+            async function getProjects() {
+                try {
+                    const response = await fetch('/api/labelstudio/projects');
+                    const data = await response.json();
+                    
+                    const resultsDiv = document.getElementById('labelstudio-results');
+                    if (data.projects && data.projects.length > 0) {
+                        let html = '<h4>Label Studio Projects:</h4>';
+                        data.projects.forEach(project => {
+                            html += `<div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                                <strong>${project.title}</strong> (ID: ${project.id})<br>
+                                <small>Tasks: ${project.task_number || 0}</small>
+                            </div>`;
+                        });
+                        resultsDiv.innerHTML = html;
+                    } else {
+                        resultsDiv.innerHTML = '<p>No projects found in Label Studio</p>';
+                    }
+                } catch (error) {
+                    document.getElementById('labelstudio-results').innerHTML = '<p style="color: red;">❌ Could not get projects: ' + error.message + '</p>';
                 }
             }
         </script>
@@ -229,12 +348,82 @@ async def upload_image(file: UploadFile = File(...)):
 @app.get("/api/status")
 async def get_status():
     """Get system status"""
-    return {
+    status = {
         "processed_images": len(list(JSON_DIR.glob("*.json"))),
         "available_images": len(list(IMAGES_DIR.glob("*.jpg")) + list(IMAGES_DIR.glob("*.png"))),
         "pending_uploads": len(list(UPLOAD_DIR.glob("*.jpg")) + list(UPLOAD_DIR.glob("*.png"))),
-        "ocr_mode": "legacy"
+        "ocr_mode": "legacy",
+        "labelstudio_available": LABELSTUDIO_AVAILABLE and labelstudio_client is not None
     }
+    
+    # Add Label Studio status if available
+    if labelstudio_client:
+        try:
+            if labelstudio_client.test_connection():
+                status["labelstudio_status"] = "connected"
+                projects = labelstudio_client.get_projects()
+                status["labelstudio_projects"] = len(projects)
+            else:
+                status["labelstudio_status"] = "disconnected"
+        except Exception as e:
+            status["labelstudio_status"] = "error"
+            status["labelstudio_error"] = str(e)
+    else:
+        status["labelstudio_status"] = "unavailable"
+    
+    return status
+
+@app.get("/api/labelstudio/projects")
+async def get_labelstudio_projects():
+    """Get Label Studio projects"""
+    if not labelstudio_client:
+        raise HTTPException(status_code=503, detail="Label Studio client not available")
+    
+    try:
+        projects = labelstudio_client.get_projects()
+        return {"projects": projects}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting projects: {e}")
+
+@app.post("/api/labelstudio/sync")
+async def sync_labelstudio():
+    """Sync processed results with Label Studio"""
+    if not labelstudio_client:
+        raise HTTPException(status_code=503, detail="Label Studio client not available")
+    
+    try:
+        success = labelstudio_client.sync_with_processed_results()
+        return {"success": success, "message": "Sync completed" if success else "Sync failed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error syncing: {e}")
+
+@app.get("/api/labelstudio/project/{project_id}/stats")
+async def get_project_stats(project_id: int):
+    """Get Label Studio project statistics"""
+    if not labelstudio_client:
+        raise HTTPException(status_code=503, detail="Label Studio client not available")
+    
+    try:
+        stats = labelstudio_client.get_project_stats(project_id)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting project stats: {e}")
+
+@app.post("/api/labelstudio/project/{project_id}/export")
+async def export_project(project_id: int, export_type: str = "YOLO"):
+    """Export Label Studio project"""
+    if not labelstudio_client:
+        raise HTTPException(status_code=503, detail="Label Studio client not available")
+    
+    try:
+        if export_type == "YOLO":
+            annotations = labelstudio_client.export_annotations(project_id, "YOLO")
+            return {"export_type": "YOLO", "annotations": annotations}
+        else:
+            tasks = labelstudio_client.export_tasks(project_id, export_type)
+            return {"export_type": export_type, "tasks": tasks}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error exporting project: {e}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False) 

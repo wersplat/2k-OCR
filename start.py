@@ -20,6 +20,8 @@ def check_dependencies():
         import easyocr
         import torch
         import ultralytics
+        import requests
+        import yaml
         print("✅ All Python dependencies are installed")
         return True
     except ImportError as e:
@@ -34,6 +36,8 @@ def create_directories():
         "processed/json", 
         "toProcess/images",
         "labelstudio_tasks",
+        "labelstudio_data",  # Persistent Label Studio data
+        "labelstudio_media",  # Persistent Label Studio media
         "yolo/data/images",
         "yolo/data/labels",
         "yolo/models/2k_stats_detector/weights"
@@ -76,6 +80,8 @@ def start_labelstudio():
             "-p", "8080:8080",
             "-v", f"{os.path.abspath('processed')}:/data",
             "-v", f"{os.path.abspath('labelstudio_tasks')}:/labelstudio_tasks",
+            "-v", f"{os.path.abspath('labelstudio_data')}:/label-studio/data",  # Persistent data
+            "-v", f"{os.path.abspath('labelstudio_media')}:/label-studio/media",  # Persistent media
             "heartexlabs/label-studio:latest",
             "label-studio", "start", "--host", "0.0.0.0", "--port", "8080"
         ], check=True)
@@ -219,7 +225,7 @@ def main():
     parser = argparse.ArgumentParser(description="NBA 2K OCR System Startup")
     parser.add_argument("command", choices=[
         "setup", "dashboard", "labelstudio", "process", "tasks", 
-        "train", "open", "status", "all", "stop"
+        "train", "open", "status", "all", "stop", "test-labelstudio", "containers", "create-user"
     ], help="Command to run")
     
     args = parser.parse_args()
@@ -309,21 +315,32 @@ def main():
         labelstudio_process = None
         if docker_available:
             print("🏷️ Starting Label Studio...")
-            try:
-                labelstudio_process = subprocess.Popen([
-                    "docker", "run", "--rm", "-d",  # Added -d for detached mode
-                    "-p", "8080:8080",
-                    "-v", f"{os.path.abspath('processed')}:/data",
-                    "-v", f"{os.path.abspath('labelstudio_tasks')}:/labelstudio_tasks",
-                    "heartexlabs/label-studio:latest",
-                    "label-studio", "start", "--host", "0.0.0.0", "--port", "8080"
-                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                
-                # Wait for Label Studio to start
-                time.sleep(5)
-                print("✅ Label Studio is starting at http://localhost:8080")
-            except Exception as e:
-                print(f"⚠️ Could not start Label Studio: {e}")
+            
+            # Check if Label Studio container is already running
+            result = subprocess.run(["docker", "ps", "--filter", "ancestor=heartexlabs/label-studio:latest", "--format", "{{.ID}}"], 
+                                  capture_output=True, text=True)
+            
+            if result.stdout.strip():
+                print("ℹ️ Label Studio container is already running")
+            else:
+                try:
+                    # Start new Label Studio container
+                    labelstudio_process = subprocess.Popen([
+                        "docker", "run", "--rm", "-d",  # Added -d for detached mode
+                        "-p", "8080:8080",
+                        "-v", f"{os.path.abspath('processed')}:/data",
+                        "-v", f"{os.path.abspath('labelstudio_tasks')}:/labelstudio_tasks",
+                        "-v", f"{os.path.abspath('labelstudio_data')}:/label-studio/data",  # Persistent data
+                        "-v", f"{os.path.abspath('labelstudio_media')}:/label-studio/media",  # Persistent media
+                        "heartexlabs/label-studio:latest",
+                        "label-studio", "start", "--host", "0.0.0.0", "--port", "8080"
+                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    
+                    # Wait for Label Studio to start
+                    time.sleep(5)
+                    print("✅ Label Studio is starting at http://localhost:8080")
+                except Exception as e:
+                    print(f"⚠️ Could not start Label Studio: {e}")
         else:
             print("⚠️ Docker not available - Label Studio will not be started")
             print("   Install Docker to use Label Studio")
@@ -372,13 +389,22 @@ def main():
         except:
             print("⚠️ Could not stop dashboard")
         
-        # Stop Label Studio container
+        # Stop Label Studio container properly
         try:
-            subprocess.run(["docker", "stop", "$(docker ps -q --filter ancestor=heartexlabs/label-studio:latest)"], 
-                         shell=True, capture_output=True)
-            print("✅ Label Studio stopped")
-        except:
-            print("⚠️ Could not stop Label Studio")
+            # Find running Label Studio containers
+            result = subprocess.run(["docker", "ps", "--filter", "ancestor=heartexlabs/label-studio:latest", "--format", "{{.ID}}"], 
+                                  capture_output=True, text=True)
+            
+            if result.stdout.strip():
+                container_ids = result.stdout.strip().split('\n')
+                for container_id in container_ids:
+                    if container_id:
+                        subprocess.run(["docker", "stop", container_id], capture_output=True)
+                        print(f"✅ Stopped Label Studio container: {container_id}")
+            else:
+                print("ℹ️ No running Label Studio containers found")
+        except Exception as e:
+            print(f"⚠️ Could not stop Label Studio: {e}")
         
         # Stop any other related processes
         try:
@@ -388,6 +414,114 @@ def main():
             pass
         
         print("✅ All services stopped")
+    
+    elif args.command == "test-labelstudio":
+        print("🧪 Testing Label Studio connection...")
+        if not check_dependencies():
+            print("❌ Cannot test Label Studio - missing dependencies")
+            return
+        
+        try:
+            from labelstudio_client import LabelStudioClient
+            client = LabelStudioClient()
+            
+            if client.test_connection():
+                print("✅ Label Studio connection successful!")
+                
+                # Get projects
+                projects = client.get_projects()
+                print(f"📊 Found {len(projects)} projects:")
+                for project in projects:
+                    if isinstance(project, dict):
+                        title = project.get('title', 'Unknown')
+                        project_id = project.get('id', 'Unknown')
+                        print(f"   • {title} (ID: {project_id})")
+                
+                # Test sync
+                print("\n🔄 Testing sync with processed results...")
+                if client.sync_with_processed_results():
+                    print("✅ Sync test successful!")
+                else:
+                    print("⚠️ Sync test failed (no processed results to sync)")
+                    
+            else:
+                print("❌ Label Studio connection failed")
+                print("   Make sure Label Studio is running at http://localhost:8080")
+                
+        except Exception as e:
+            print(f"❌ Label Studio test failed: {e}")
+    
+    elif args.command == "containers":
+        print("🐳 Checking Docker containers...")
+        
+        try:
+            # Check if Docker is available
+            result = subprocess.run(["docker", "--version"], capture_output=True, text=True)
+            if result.returncode != 0:
+                print("❌ Docker not found")
+                return
+            
+            # List all running containers
+            result = subprocess.run(["docker", "ps"], capture_output=True, text=True)
+            if result.returncode == 0:
+                print("📋 Running containers:")
+                print(result.stdout)
+            else:
+                print("❌ Could not list containers")
+            
+            # Check specifically for Label Studio containers
+            result = subprocess.run(["docker", "ps", "--filter", "ancestor=heartexlabs/label-studio:latest"], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0 and result.stdout.strip():
+                print("\n🏷️ Label Studio containers:")
+                print(result.stdout)
+            else:
+                print("\nℹ️ No Label Studio containers running")
+                
+        except Exception as e:
+            print(f"❌ Error checking containers: {e}")
+    
+    elif args.command == "create-user":
+        print("👤 Creating Label Studio user account...")
+        
+        try:
+            # Check if Docker is available
+            result = subprocess.run(["docker", "--version"], capture_output=True, text=True)
+            if result.returncode != 0:
+                print("❌ Docker not found")
+                return
+            
+            # Check if Label Studio container is running
+            result = subprocess.run(["docker", "ps", "--filter", "ancestor=heartexlabs/label-studio:latest", "--format", "{{.ID}}"], 
+                                  capture_output=True, text=True)
+            
+            if not result.stdout.strip():
+                print("⚠️ Label Studio is not running")
+                print("   Start Label Studio first with: python3 start.py labelstudio")
+                return
+            
+            container_id = result.stdout.strip().split('\n')[0]
+            
+            # Create user account
+            print("🔧 Creating user account...")
+            result = subprocess.run([
+                "docker", "exec", container_id,
+                "label-studio", "user", "create",
+                "--username", "admin",
+                "--password", "admin123"
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print("✅ User account created successfully!")
+                print("   Username: admin")
+                print("   Password: admin123")
+                print("\n🔗 You can now log in at http://localhost:8080")
+            else:
+                print("⚠️ User might already exist or error occurred:")
+                print(result.stderr)
+                
+        except Exception as e:
+            print(f"❌ Error creating user: {e}")
 
 if __name__ == "__main__":
     main() 
