@@ -15,8 +15,21 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 class LabelStudioClient:
-    def __init__(self, config_path: str = "config.yaml"):
+    def __init__(self, config_path: str = None):
         """Initialize Label Studio client with configuration"""
+        if config_path is None:
+            # Try to find config.yaml in the current directory or parent directory
+            import os
+            current_dir = os.getcwd()
+            parent_dir = os.path.dirname(current_dir)
+            
+            if os.path.exists(os.path.join(current_dir, "config.yaml")):
+                config_path = os.path.join(current_dir, "config.yaml")
+            elif os.path.exists(os.path.join(parent_dir, "config.yaml")):
+                config_path = os.path.join(parent_dir, "config.yaml")
+            else:
+                raise FileNotFoundError("config.yaml not found in current or parent directory")
+        
         self.config = self.load_config(config_path)
         self.base_url = self.config['labelstudio']['auth']['api_url']
         self.token = self.config['labelstudio']['auth']['token']
@@ -110,7 +123,15 @@ class LabelStudioClient:
             
             response = requests.get(f"{self.base_url}/projects/", headers=headers)
             if response.status_code == 200:
-                return response.json()
+                data = response.json()
+                # Handle both list and paginated response formats
+                if isinstance(data, list):
+                    return data
+                elif isinstance(data, dict) and 'results' in data:
+                    return data['results']
+                else:
+                    logger.warning(f"Unexpected response format: {type(data)}")
+                    return []
             else:
                 logger.error(f"Failed to get projects: {response.status_code}")
                 return []
@@ -155,17 +176,27 @@ class LabelStudioClient:
             logger.error(f"Error creating project: {e}")
             return None
     
-    def get_or_create_project(self, name: str, description: str = "") -> Optional[Dict]:
-        """Get existing project or create new one"""
+    def project_exists(self, name: str) -> Optional[Dict]:
+        """Check if a project exists by name and return it if found"""
         projects = self.get_projects()
         
-        # Check if project already exists
         for project in projects:
             if isinstance(project, dict) and project.get('title') == name:
                 logger.info(f"✅ Found existing project: {project.get('title')} (ID: {project.get('id')})")
                 return project
         
-        # Create new project
+        logger.info(f"❌ Project '{name}' not found")
+        return None
+    
+    def get_or_create_project(self, name: str, description: str = "") -> Optional[Dict]:
+        """Get existing project or create new one if it doesn't exist"""
+        # First check if project exists
+        existing_project = self.project_exists(name)
+        if existing_project:
+            return existing_project
+        
+        # Create new project if it doesn't exist
+        logger.info(f"🆕 Creating new project: {name}")
         return self.create_project(name, description)
     
     def import_tasks(self, project_id: int, tasks: List[Dict]) -> bool:
@@ -183,7 +214,7 @@ class LabelStudioClient:
             }
             
             response = requests.post(
-                f"{self.base_url}/projects/{project_id}/import/",
+                f"{self.base_url}/projects/{project_id}/import",
                 headers=headers,
                 json=tasks
             )
@@ -309,15 +340,23 @@ class LabelStudioClient:
                 
                 # Find corresponding image
                 image_name = json_file.stem.replace('_results', '')
-                image_path = Path(self.config['paths']['processed_images']) / f"{image_name}.jpg"
-                if not image_path.exists():
-                    image_path = Path(self.config['paths']['processed_images']) / f"{image_name}.png"
+                
+                # Check if image_name already has an extension
+                if '.' in image_name:
+                    # Image name already has extension, use it directly
+                    image_path = Path(self.config['paths']['processed_images']) / image_name
+                else:
+                    # Try common extensions
+                    image_path = Path(self.config['paths']['processed_images']) / f"{image_name}.jpg"
+                    if not image_path.exists():
+                        image_path = Path(self.config['paths']['processed_images']) / f"{image_name}.png"
                 
                 if image_path.exists():
-                    # Create task
+                    # Create task with dashboard image URL
+                    dashboard_url = self.config.get('dashboard', {}).get('url', 'http://localhost:8000')
                     task = {
                         "data": {
-                            "image": f"/data/local-files/?d={str(image_path.absolute())}",
+                            "image": f"{dashboard_url}/{image_path.name}",
                             "filename": image_path.name
                         },
                         "meta": {

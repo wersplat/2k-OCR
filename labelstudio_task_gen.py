@@ -6,6 +6,13 @@ from datetime import datetime
 import argparse
 import logging
 
+# Try to import Label Studio client
+try:
+    from labelstudio_client import LabelStudioClient
+    LABELSTUDIO_AVAILABLE = True
+except ImportError:
+    LABELSTUDIO_AVAILABLE = False
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class LabelStudioTaskGenerator:
@@ -130,9 +137,11 @@ class LabelStudioTaskGenerator:
 
     def create_labelstudio_task(self, image_path, ocr_results, bounding_boxes):
         """Create a Label Studio task from OCR results and bounding boxes"""
+        # Use dashboard URL for images
+        dashboard_url = "http://localhost:8000"
         task = {
             "data": {
-                "image": f"/data/local-files/?d={image_path}",
+                "image": f"{dashboard_url}/{os.path.basename(image_path)}",
                 "filename": os.path.basename(image_path)
             },
             "annotations": [
@@ -263,6 +272,62 @@ class LabelStudioTaskGenerator:
         
         logging.info(f"Saved {len(tasks)} tasks to {output_path}")
         return output_path
+    
+    def create_or_get_project(self, project_name="NBA 2K OCR Project"):
+        """Create or get existing Label Studio project"""
+        if not LABELSTUDIO_AVAILABLE:
+            logging.warning("⚠️ Label Studio client not available")
+            return None
+        
+        try:
+            client = LabelStudioClient()
+            
+            # Check if project exists first
+            existing_project = client.project_exists(project_name)
+            if existing_project:
+                logging.info(f"✅ Using existing project: {existing_project['title']} (ID: {existing_project['id']})")
+                return existing_project
+            
+            # Create new project if it doesn't exist
+            logging.info(f"🆕 Creating new project: {project_name}")
+            new_project = client.get_or_create_project(project_name)
+            if new_project:
+                logging.info(f"✅ Created project: {new_project['title']} (ID: {new_project['id']})")
+                return new_project
+            else:
+                logging.error("❌ Failed to create project")
+                return None
+                
+        except Exception as e:
+            logging.error(f"❌ Error with Label Studio client: {e}")
+            return None
+    
+    def import_tasks_to_labelstudio(self, tasks, project_name="NBA 2K OCR Project"):
+        """Import tasks directly to Label Studio project"""
+        if not LABELSTUDIO_AVAILABLE:
+            logging.warning("⚠️ Label Studio client not available")
+            return False
+        
+        try:
+            client = LabelStudioClient()
+            
+            # Get or create project
+            project = self.create_or_get_project(project_name)
+            if not project:
+                return False
+            
+            # Import tasks
+            success = client.import_tasks(project['id'], tasks)
+            if success:
+                logging.info(f"✅ Successfully imported {len(tasks)} tasks to project '{project_name}'")
+                return True
+            else:
+                logging.error("❌ Failed to import tasks")
+                return False
+                
+        except Exception as e:
+            logging.error(f"❌ Error importing tasks: {e}")
+            return False
 
     def create_labelstudio_config(self):
         """Create Label Studio configuration file"""
@@ -370,6 +435,8 @@ def main():
     parser.add_argument('--output-dir', default='./labelstudio_tasks', help='Output directory for tasks')
     parser.add_argument('--export-yolo', action='store_true', help='Export for YOLO training')
     parser.add_argument('--yolo-output', default='./yolo/data', help='YOLO dataset output directory')
+    parser.add_argument('--import-to-labelstudio', action='store_true', help='Import tasks directly to Label Studio')
+    parser.add_argument('--project-name', default='NBA 2K OCR Project', help='Label Studio project name')
     
     args = parser.parse_args()
     
@@ -384,6 +451,15 @@ def main():
         
         # Create Label Studio config
         config_path = generator.create_labelstudio_config()
+        
+        # Import to Label Studio if requested
+        if args.import_to_labelstudio:
+            logging.info(f"Importing tasks to Label Studio project: {args.project_name}")
+            success = generator.import_tasks_to_labelstudio(tasks, args.project_name)
+            if success:
+                logging.info("✅ Tasks successfully imported to Label Studio")
+            else:
+                logging.error("❌ Failed to import tasks to Label Studio")
         
         # Export for YOLO if requested
         if args.export_yolo:

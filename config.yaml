@@ -25,6 +25,20 @@ coordinates:
     - 1398
     - 1479
     stats:
+      team_name_a:
+        width: 135
+        height: 77
+        x_offset: 1224
+      team_score_a:
+        width: 135
+        height: 77
+      team_name_b:
+        width: 135
+        height: 77
+        x_offset: 1224
+      team_score_b:
+        width: 135
+        height: 77
       name:
         width: 485
         height: 81
@@ -120,17 +134,31 @@ labelstudio:
     description: NBA 2K Box Score OCR Annotation Project
     label_config: "<View>\n  <Image name=\"image\" value=\"$image\" zoom=\"true\"\
       \ zoomControl=\"true\" rotateControl=\"true\"/>\n  <RectangleLabels name=\"\
-      label\" toName=\"image\">\n    <Label value=\"name\" background=\"red\"/>\n\
-      \    <Label value=\"grade\" background=\"blue\"/>\n    <Label value=\"points\"\
-      \ background=\"green\"/>\n    <Label value=\"rebounds\" background=\"yellow\"\
-      />\n    <Label value=\"assists\" background=\"orange\"/>\n    <Label value=\"\
-      steals\" background=\"purple\"/>\n    <Label value=\"blocks\" background=\"\
-      pink\"/>\n    <Label value=\"fouls\" background=\"brown\"/>\n    <Label value=\"\
-      tos\" background=\"gray\"/>\n    <Label value=\"FGMFGA\" background=\"cyan\"\
-      />\n    <Label value=\"3PM3PA\" background=\"magenta\"/>\n    <Label value=\"\
-      FTMFTA\" background=\"lime\"/>\n    <Label value=\"team_quarter\" background=\"\
-      navy\"/>\n  </RectangleLabels>\n</View>\n"
+      label\" toName=\"image\">\n    <Label value= \"team a name\" background=\"red\"/>\n\
+      <Label value= \"team a score\" background=\"red\"/>\n\
+      <Label value= \"team b name\" background=\"blue\"/>\n\
+      <Label value= \"team b score\" background=\"blue\"/>\n\
+      <Label value=\"name\" background=\"red\"/>\n\
+      <Label value=\"grade\" background=\"blue\"/>\n\
+      <Label value=\"points\" background=\"green\"/>\n\
+      <Label value=\"rebounds\" background=\"yellow\"/>\n\
+      <Label value=\"assists\" background=\"orange\"/>\n\
+      <Label value=\"steals\" background=\"purple\"/>\n\
+      <Label value=\"blocks\" background=\"pink\"/>\n\
+      <Label value=\"fouls\" background=\"brown\"/>\n\
+      <Label value=\"tos\" background=\"gray\"/>\n\
+      <Label value=\"FGMFGA\" background=\"cyan\"/>\n\
+      <Label value=\"3PM3PA\" background=\"magenta\"/>\n\
+      <Label value=\"FTMFTA\" background=\"lime\"/>\n   </RectangleLabels>\n</View>\n"
   labels:
+  - name: team_name_a
+    background: red
+  - name: team_score_a
+    background: red
+  - name: team_name_b
+    background: blue
+  - name: team_score_b
+    background: blue
   - name: name
     background: red
   - name: grade
@@ -155,8 +183,6 @@ labelstudio:
     background: magenta
   - name: FTMFTA
     background: lime
-  - name: team_quarter
-    background: navy
 yolo:
   model:
     size: n
@@ -173,6 +199,10 @@ yolo:
     train_split: 0.8
     validation_split: 0.2
   classes:
+  - team_name_a
+  - team_score_a
+  - team_name_b
+  - team_score_b
   - name
   - grade
   - points
@@ -185,7 +215,6 @@ yolo:
   - FGMFGA
   - 3PM3PA
   - FTMFTA
-  - team_quarter
 paths:
   input_images: ./toProcess/images
   processed_images: ./processed/images

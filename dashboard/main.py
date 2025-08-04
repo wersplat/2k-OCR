@@ -14,9 +14,14 @@ import logging
 
 # Import Label Studio client
 try:
+    import sys
+    import os
+    # Add parent directory to Python path
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from labelstudio_client import LabelStudioClient
     LABELSTUDIO_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"Label Studio import error: {e}")
     LABELSTUDIO_AVAILABLE = False
 
 # Setup logging
@@ -29,7 +34,7 @@ app = FastAPI(title="NBA 2K OCR Dashboard", version="1.0.0")
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000"],
+    allow_origins=["http://localhost:3000", "http://localhost:8000", "http://localhost:8080"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -322,12 +327,32 @@ async def get_results(filename: str):
 
 @app.get("/api/images/{filename}")
 async def get_image(filename: str):
-    """Serve processed images"""
+    """Serve processed images via API"""
     image_path = IMAGES_DIR / filename
     if not image_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
     
     return FileResponse(image_path)
+
+@app.get("/{filename}")
+async def serve_image(filename: str):
+    """Serve processed images at root level for Label Studio compatibility"""
+    # Only serve image files
+    if not filename.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp')):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Check multiple possible image locations
+    possible_paths = [
+        IMAGES_DIR / filename,  # processed/images/
+        UPLOAD_DIR / filename,  # toProcess/images/
+        BASE_DIR / "toProcess" / "images" / filename,  # Alternative path
+    ]
+    
+    for image_path in possible_paths:
+        if image_path.exists():
+            return FileResponse(image_path, media_type="image/jpeg")
+    
+    raise HTTPException(status_code=404, detail="Image not found")
 
 @app.post("/api/upload")
 async def upload_image(file: UploadFile = File(...)):
@@ -390,6 +415,29 @@ async def get_labelstudio_projects():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting projects: {e}")
 
+@app.get("/api/labelstudio/project/check/{project_name}")
+async def check_project_exists(project_name: str):
+    """Check if a Label Studio project exists by name"""
+    if not labelstudio_client:
+        raise HTTPException(status_code=503, detail="Label Studio client not available")
+    
+    try:
+        project = labelstudio_client.project_exists(project_name)
+        if project:
+            return {
+                "exists": True,
+                "project": project,
+                "message": f"Project '{project_name}' exists (ID: {project['id']})"
+            }
+        else:
+            return {
+                "exists": False,
+                "project": None,
+                "message": f"Project '{project_name}' does not exist"
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error checking project: {e}")
+
 @app.post("/api/labelstudio/sync")
 async def sync_labelstudio():
     """Sync processed results with Label Studio"""
@@ -397,8 +445,20 @@ async def sync_labelstudio():
         raise HTTPException(status_code=503, detail="Label Studio client not available")
     
     try:
-        success = labelstudio_client.sync_with_processed_results()
-        return {"success": success, "message": "Sync completed" if success else "Sync failed"}
+        # Get project name from config
+        project_name = config.get('labelstudio', {}).get('project', {}).get('name', 'NBA 2K OCR Project')
+        
+        # Check if project exists first
+        existing_project = labelstudio_client.project_exists(project_name)
+        if existing_project:
+            logger.info(f"Using existing project: {existing_project['title']} (ID: {existing_project['id']})")
+        
+        success = labelstudio_client.sync_with_processed_results(project_name)
+        return {
+            "success": success, 
+            "message": "Sync completed" if success else "Sync failed",
+            "project_used": existing_project if existing_project else "Created new project"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error syncing: {e}")
 
