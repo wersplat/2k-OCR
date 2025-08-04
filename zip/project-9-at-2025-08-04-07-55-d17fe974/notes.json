@@ -1,0 +1,73 @@
+{
+  "categories": [
+    {
+      "id": 0,
+      "name": "3PM3PA"
+    },
+    {
+      "id": 1,
+      "name": "FGMFGA"
+    },
+    {
+      "id": 2,
+      "name": "FTMFTA"
+    },
+    {
+      "id": 3,
+      "name": "assists"
+    },
+    {
+      "id": 4,
+      "name": "blocks"
+    },
+    {
+      "id": 5,
+      "name": "fouls"
+    },
+    {
+      "id": 6,
+      "name": "grade"
+    },
+    {
+      "id": 7,
+      "name": "name"
+    },
+    {
+      "id": 8,
+      "name": "points"
+    },
+    {
+      "id": 9,
+      "name": "rebounds"
+    },
+    {
+      "id": 10,
+      "name": "steals"
+    },
+    {
+      "id": 11,
+      "name": "team a name"
+    },
+    {
+      "id": 12,
+      "name": "team a score"
+    },
+    {
+      "id": 13,
+      "name": "team b name"
+    },
+    {
+      "id": 14,
+      "name": "team b score"
+    },
+    {
+      "id": 15,
+      "name": "tos"
+    }
+  ],
+  "info": {
+    "year": 2025,
+    "version": "1.0",
+    "contributor": "Label Studio"
+  }
+}

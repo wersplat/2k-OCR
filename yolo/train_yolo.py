@@ -29,36 +29,67 @@ class YOLOTrainer:
         self.images_dir = self.data_dir / "images"
         self.labels_dir = self.data_dir / "labels"
         
-        # Class names for NBA 2K stats
-        self.class_names = [
-            'name', 'grade', 'points', 'rebounds', 'assists', 'steals', 
-            'blocks', 'fouls', 'tos', 'FGMFGA', '3PM3PA', 'FTMFTA', 'team_quarter'
-        ]
+        # Class names will be loaded from dataset.yaml
+        self.class_names = []
     
     def validate_dataset(self):
         """Validate that the dataset is properly structured"""
         if not self.dataset_yaml.exists():
             raise FileNotFoundError(f"Dataset YAML not found: {self.dataset_yaml}")
         
-        if not self.images_dir.exists():
-            raise FileNotFoundError(f"Images directory not found: {self.images_dir}")
+        # Check for train/val structure
+        train_images_dir = self.images_dir / "train"
+        val_images_dir = self.images_dir / "val"
+        train_labels_dir = self.labels_dir / "train"
+        val_labels_dir = self.labels_dir / "val"
         
-        if not self.labels_dir.exists():
-            raise FileNotFoundError(f"Labels directory not found: {self.labels_dir}")
+        if not train_images_dir.exists():
+            raise FileNotFoundError(f"Train images directory not found: {train_images_dir}")
+        
+        if not val_images_dir.exists():
+            raise FileNotFoundError(f"Validation images directory not found: {val_images_dir}")
+        
+        if not train_labels_dir.exists():
+            raise FileNotFoundError(f"Train labels directory not found: {train_labels_dir}")
+        
+        if not val_labels_dir.exists():
+            raise FileNotFoundError(f"Validation labels directory not found: {val_labels_dir}")
         
         # Count files
-        image_files = list(self.images_dir.glob("*.jpg")) + list(self.images_dir.glob("*.png"))
-        label_files = list(self.labels_dir.glob("*.txt"))
+        train_images = list(train_images_dir.glob("*.jpg")) + list(train_images_dir.glob("*.png"))
+        val_images = list(val_images_dir.glob("*.jpg")) + list(val_images_dir.glob("*.png"))
+        train_labels = list(train_labels_dir.glob("*.txt"))
+        val_labels = list(val_labels_dir.glob("*.txt"))
         
-        logging.info(f"Found {len(image_files)} images and {len(label_files)} label files")
+        total_images = len(train_images) + len(val_images)
+        total_labels = len(train_labels) + len(val_labels)
         
-        if len(image_files) == 0:
+        logging.info(f"Found {len(train_images)} train images and {len(val_images)} validation images")
+        logging.info(f"Found {len(train_labels)} train labels and {len(val_labels)} validation labels")
+        
+        if total_images == 0:
             raise ValueError("No images found in dataset")
         
-        if len(label_files) == 0:
+        if total_labels == 0:
             raise ValueError("No label files found in dataset")
         
-        return len(image_files), len(label_files)
+        return total_images, total_labels
+    
+    def load_classes_from_yaml(self):
+        """Load class names from dataset.yaml"""
+        if not self.dataset_yaml.exists():
+            raise FileNotFoundError(f"Dataset YAML not found: {self.dataset_yaml}")
+        
+        with open(self.dataset_yaml, 'r') as f:
+            dataset_config = yaml.safe_load(f)
+        
+        if 'names' in dataset_config:
+            self.class_names = dataset_config['names']
+            logging.info(f"Loaded {len(self.class_names)} classes from dataset.yaml")
+        else:
+            raise ValueError("No 'names' field found in dataset.yaml")
+        
+        return self.class_names
     
     def create_dataset_yaml(self):
         """Create or update dataset.yaml file"""
@@ -146,7 +177,7 @@ class YOLOTrainer:
             'epochs': self.epochs,
             'batch': self.batch_size,
             'imgsz': 640,
-            'device': 'auto',  # Use GPU if available
+            'device': 'cpu',  # Use CPU since CUDA is not available
             'project': str(self.weights_dir.parent),
             'name': 'weights',
             'save_period': 10,  # Save every 10 epochs
@@ -162,7 +193,6 @@ class YOLOTrainer:
             'box': 7.5,
             'cls': 0.5,
             'dfl': 1.5,
-            'fl_gamma': 0.0,
             'label_smoothing': 0.0,
             'nbs': 64,
             'overlap_mask': True,
@@ -260,10 +290,11 @@ def main():
         # Validate dataset
         trainer.validate_dataset()
         
+        # Load classes from dataset.yaml
+        trainer.load_classes_from_yaml()
+        
         if args.split_dataset:
             trainer.split_dataset()
-        else:
-            trainer.create_dataset_yaml()
         
         if args.validate_only:
             # Only validate existing model

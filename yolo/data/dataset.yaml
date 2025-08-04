@@ -1,19 +1,19 @@
-path: ../data  # relative to where the training script is run from
-train: images/train  # train images
-val: images/val  # validation images
-test: images/test  # test images (optional)
-
-# Classes for NBA 2K box score stats
+train: images/train
+val: images/val
 names:
-  0: player_name
-  1: grade
-  2: points
-  3: rebounds
-  4: assists
-  5: steals
-  6: blocks
-  7: fouls
-  8: turnovers
-  9: fgm_fga
-  10: 3pm_3pa
-  11: ftm_fta
+  0: 3PM3PA
+  1: FGMFGA
+  2: FTMFTA
+  3: assists
+  4: blocks
+  5: fouls
+  6: grade
+  7: name
+  8: points
+  9: rebounds
+  10: steals
+  11: team a name
+  12: team a score
+  13: team b name
+  14: team b score
+  15: tos
