@@ -229,8 +229,15 @@ class YOLOTrainer:
     
     def validate_model(self, model_path=None):
         """Validate trained model"""
+        import glob
         if model_path is None:
-            model_path = self.weights_dir / "best.pt"
+            # Find the latest best.pt in weights subdirectories
+            weights_dirs = sorted(glob.glob(str(self.weights_dir.parent / "weights*") + "/weights/best.pt"), reverse=True)
+            if weights_dirs:
+                model_path = weights_dirs[0]
+                logging.info(f"Using latest best.pt for validation: {model_path}")
+            else:
+                model_path = self.weights_dir / "best.pt"
         
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model not found: {model_path}")
