@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # Main application service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nba2k-ocr-app
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/data
+      - RAILWAY_ENVIRONMENT=production
+    volumes:
+      - ./processed:/app/processed
+      - ./toProcess:/app/toProcess
+      - ./yolo:/app/yolo
+      - ./labelstudio_tasks:/app/labelstudio_tasks
+      - ./labelstudio_data:/app/labelstudio_data
+      - ./labelstudio_media:/app/labelstudio_media
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Label Studio for annotation
+  labelstudio:
+    image: heartexlabs/label-studio:latest
+    container_name: nba2k-labelstudio
+    ports:
+      - "8080:8080"
+    environment:
+      - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/data
+      - LABEL_STUDIO_HOST=0.0.0.0
+      - LABEL_STUDIO_PORT=8080
+    volumes:
+      - ./processed:/data
+      - ./labelstudio_tasks:/labelstudio_tasks
+      - labelstudio_data:/label-studio/data
+      - labelstudio_media:/label-studio/media
+    command: label-studio start --host 0.0.0.0 --port 8080
+    restart: unless-stopped
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  labelstudio_data:
+  labelstudio_media: 

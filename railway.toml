@@ -1,0 +1,15 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "python3 start.py all"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+[variables]
+PYTHONPATH = "/app"
+LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED = "true"
+LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT = "/data" 

@@ -67,6 +67,11 @@ if LABELSTUDIO_AVAILABLE:
         logger.error(f"❌ Failed to initialize Label Studio client: {e}")
         labelstudio_client = None
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Railway"""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Main dashboard page"""

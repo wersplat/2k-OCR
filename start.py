@@ -53,11 +53,22 @@ def start_dashboard():
     print("🚀 Starting NBA 2K OCR Dashboard...")
     
     try:
-        # Change to dashboard directory
-        os.chdir("dashboard")
+        # Check if we're in Railway environment
+        railway_env = os.environ.get('RAILWAY_ENVIRONMENT', 'development')
         
-        # Start the dashboard
-        subprocess.run(["python3", "main.py"], check=True)
+        if railway_env == 'production':
+            # In Railway, use uvicorn directly
+            subprocess.run([
+                "python3", "-m", "uvicorn", 
+                "dashboard.main:app", 
+                "--host", "0.0.0.0", 
+                "--port", "8000",
+                "--reload", "False"
+            ], check=True)
+        else:
+            # Local development - change to dashboard directory
+            os.chdir("dashboard")
+            subprocess.run(["python3", "main.py"], check=True)
     except KeyboardInterrupt:
         print("\n🛑 Dashboard stopped")
     except Exception as e:
